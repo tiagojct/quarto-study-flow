@@ -41,8 +41,7 @@ study-flow:
 
 # Clinical prediction model
 
-Participant flow follows the TRIPOD+AI 2024 statement (which supersedes
-TRIPOD 2015) for studies developing or validating a clinical prediction
-model.
+Participant flow follows the TRIPOD+AI 2024 statement for studies
+developing or validating a clinical prediction model.
 
 {{< study-flow >}}

@@ -43,7 +43,6 @@ study-flow:
 # Two-arm RCT
 
 The diagram below summarises participant flow following the CONSORT 2025
-statement (which supersedes CONSORT 2010 and preserves the same four-phase
-flow diagram structure).
+statement.
 
 {{< study-flow >}}

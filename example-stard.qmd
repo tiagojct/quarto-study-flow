@@ -34,8 +34,9 @@ study-flow:
 
 # Diagnostic accuracy study
 
-Participant flow follows the STARD 2015 statement for diagnostic accuracy
-studies. The 2×2 contingency grid at the bottom enables calculation of
-sensitivity, specificity, and predictive values.
+Participant flow follows the STARD 2015 statement for diagnostic
+accuracy studies. The 2×2 contingency grid at the bottom gives the
+counts needed to compute sensitivity, specificity, and predictive
+values.
 
 {{< study-flow >}}

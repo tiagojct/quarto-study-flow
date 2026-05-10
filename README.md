@@ -4,19 +4,18 @@
 [![Quarto](https://img.shields.io/badge/Quarto-%E2%89%A51.4-37a779.svg)](https://quarto.org)
 
 A Quarto shortcode extension that renders **participant-flow diagrams**
-for the major reporting guidelines straight from structured YAML in your
-document frontmatter — no manual drawing, no Graphviz, no `rsvg-convert`,
-no shell-outs. Diagrams are emitted as inline **SVG** for HTML output and
-as native **TikZ** for LaTeX/PDF output, so the extension has zero runtime
-dependencies beyond Quarto itself.
+for five reporting guidelines from structured YAML in your document
+frontmatter. Diagrams are emitted as inline **SVG** for HTML output and
+as native **TikZ** for LaTeX/PDF output, with no runtime dependencies
+beyond Quarto itself.
 
-| `type:`   | Guideline                            | Used for                       |
-| --------- | ------------------------------------ | ------------------------------ |
-| `consort` | **CONSORT 2025** (supersedes 2010)   | Randomised controlled trials   |
-| `strobe`  | STROBE                               | Observational studies          |
-| `prisma`  | **PRISMA 2020**                      | Systematic reviews             |
-| `tripod`  | **TRIPOD+AI 2024** (supersedes 2015) | Clinical prediction models     |
-| `stard`   | **STARD 2015**                       | Diagnostic accuracy studies    |
+| `type:`   | Guideline                        | Used for                     |
+| --------- | -------------------------------- | ---------------------------- |
+| `consort` | CONSORT 2025 (supersedes 2010)   | Randomised controlled trials |
+| `strobe`  | STROBE                           | Observational studies        |
+| `prisma`  | PRISMA 2020                      | Systematic reviews           |
+| `tripod`  | TRIPOD+AI 2024 (supersedes 2015) | Clinical prediction models   |
+| `stard`   | STARD 2015                       | Diagnostic accuracy studies  |
 
 ## Preview
 
@@ -124,10 +123,10 @@ study-flow:
 ```
 
 The CONSORT layout follows the four canonical rows from the CONSORT 2025
-statement (which supersedes CONSORT 2010 with no structural change to the
-flow diagram): **Enrolment → Allocation → Follow-up → Analysis**, with a
-side arrow from Enrolment to the *Excluded* box, and N parallel columns
-(one per arm) under *Randomised*.
+statement, which supersedes CONSORT 2010 with no structural change to the
+flow diagram: **Enrolment, Allocation, Follow-up, Analysis**. A side
+arrow connects Enrolment to the *Excluded* box, and *Randomised* splits
+into N parallel columns, one per arm.
 
 ### STROBE
 
@@ -158,14 +157,15 @@ study-flow:
       analysed: 3790
 ```
 
-The STROBE flow runs **Source → Eligible → Enrolled** as a vertical spine,
-each stage with an optional *Excluded* sidebar. Below the spine the diagram
-splits into N exposure / case-control columns with optional follow-up loss
-and analysis rows, mirroring how cohort flow is conventionally drawn under
-the STROBE statement.
+The STROBE flow runs **Source, Eligible, Enrolled** as a vertical spine,
+each stage with an optional *Excluded* sidebar. Below the spine the
+diagram splits into N exposure or case-control columns with optional
+follow-up loss and analysis rows, mirroring how cohort flow is
+conventionally drawn under the STROBE statement.
 
-`source`, `eligible`, `enrolled`, and `groups` are all individually optional
-— omit any stage you don't need. At least one stage or group is required.
+`source`, `eligible`, `enrolled`, and `groups` are all individually
+optional. Omit any stage you don't need. At least one stage or group is
+required.
 
 ### PRISMA 2020
 
@@ -193,11 +193,11 @@ study-flow:
     reports: 134
 ```
 
-The PRISMA layout follows the canonical PRISMA 2020 flow with five rows on
-the main spine —
-**Records identified → Records screened → Reports sought → Reports assessed
-→ Studies included** — and *Excluded* / *Removed* boxes branching to the
-right at each step. Any field you omit collapses the corresponding box.
+The PRISMA layout follows the canonical PRISMA 2020 flow with five rows
+on the main spine: **Records identified, Records screened, Reports
+sought, Reports assessed, Studies included**. *Excluded* and *Removed*
+boxes branch to the right at each step. Any field you omit collapses the
+corresponding box.
 
 ### TRIPOD+AI
 
@@ -228,11 +228,11 @@ study-flow:
 ```
 
 TRIPOD+AI 2024 supersedes TRIPOD 2015 and applies to studies developing,
-validating, or updating a clinical prediction model (whether regression or
-machine-learning based). The diagram puts an optional **Source → Eligible**
-spine at the top, then splits into 1+ parallel cohort columns (typically
-*development* and *external validation*), each with its own outcome
-breakdown row.
+validating, or updating a clinical prediction model (whether regression
+or machine-learning based). The diagram puts an optional **Source,
+Eligible** spine at the top, then splits into 1+ parallel cohort columns
+(typically *development* and *external validation*), each with its own
+outcome breakdown row.
 
 ### STARD 2015
 
@@ -262,12 +262,11 @@ study-flow:
 ```
 
 The STARD layout follows the canonical STARD 2015 prototypical diagram
-with a four-row spine —
-**Assessed for eligibility → Enrolled → Received index test → Received
-reference standard** — each with optional right-side *Excluded* / *Did not
-receive* sidebars, and a 2×2 contingency grid at the bottom (TP / FP / FN
-/ TN) with `Reference standard +/−` column headers and `Index test +/−`
-row headers.
+with a four-row spine: **Assessed for eligibility, Enrolled, Received
+index test, Received reference standard**. Each row can have an optional
+right-side *Excluded* or *Did not receive* sidebar. Below the spine sits
+a 2×2 contingency grid (TP, FP, FN, TN) with `Reference standard +/−`
+column headers and `Index test +/−` row headers.
 
 ## Output formats
 
@@ -275,7 +274,7 @@ row headers.
 | ----------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `html`            | inline SVG            | Scales to container; uses `text-anchor="middle"` and `preserveAspectRatio="xMidYMid meet"` for clean responsive layout. |
 | `revealjs`        | inline SVG            | Same SVG output as `html`.                                                                                             |
-| `pdf` / `latex`   | TikZ                  | Auto-loads `tikz`, `graphicx`, and the `arrows.meta` library. Wrapped in `\resizebox{\linewidth}{!}{...}` so it always fits the text width. Works with any LaTeX engine — no `rsvg-convert` required. |
+| `pdf` / `latex`   | TikZ                  | Auto-loads `tikz`, `graphicx`, and the `arrows.meta` library. Wrapped in `\resizebox{\linewidth}{!}{...}` so it always fits the text width. Works with any LaTeX engine; `rsvg-convert` is not needed. |
 | anything else     | inline SVG (fallback) |                                                                                                                        |
 
 For PDF output, `pdf-engine: xelatex` is recommended in your document YAML
@@ -286,11 +285,11 @@ sign in STARD's 2×2 grid) render natively without configuration.
 
 This repository ships ready-to-render examples:
 
-- [`example-consort.qmd`](example-consort.qmd) — two-arm RCT
-- [`example-strobe.qmd`](example-strobe.qmd) — cohort study
-- [`example-prisma.qmd`](example-prisma.qmd) — systematic review
-- [`example-tripod.qmd`](example-tripod.qmd) — prediction model with development + external validation cohorts
-- [`example-stard.qmd`](example-stard.qmd) — diagnostic accuracy study with 2×2 contingency grid
+- [`example-consort.qmd`](example-consort.qmd): two-arm RCT
+- [`example-strobe.qmd`](example-strobe.qmd): cohort study
+- [`example-prisma.qmd`](example-prisma.qmd): systematic review
+- [`example-tripod.qmd`](example-tripod.qmd): prediction model with development and external validation cohorts
+- [`example-stard.qmd`](example-stard.qmd): diagnostic accuracy study with a 2×2 contingency grid
 
 Render any of them with:
 
@@ -410,21 +409,21 @@ outcomes:                                  # required
 
 ## Reporting guideline references
 
-- **CONSORT 2025** — Hopewell S et al. *CONSORT 2025 statement: updated
+- CONSORT 2025: Hopewell S et al. *CONSORT 2025 statement: updated
   guideline for reporting randomised trials.* The Lancet, 2025.
   <https://www.consort-spirit.org>
-- **STROBE** — von Elm E et al. *Strengthening the Reporting of Observational
+- STROBE: von Elm E et al. *Strengthening the Reporting of Observational
   Studies in Epidemiology (STROBE).* Ann Intern Med, 2007.
   <https://www.strobe-statement.org>
-- **PRISMA 2020** — Page MJ et al. *The PRISMA 2020 statement: an updated
+- PRISMA 2020: Page MJ et al. *The PRISMA 2020 statement: an updated
   guideline for reporting systematic reviews.* BMJ, 2021.
   <https://www.prisma-statement.org>
-- **TRIPOD+AI 2024** — Collins GS et al. *TRIPOD+AI statement: updated
-  guidance for reporting clinical prediction models that use regression or
-  machine learning methods.* BMJ, 2024.
+- TRIPOD+AI 2024: Collins GS et al. *TRIPOD+AI statement: updated
+  guidance for reporting clinical prediction models that use regression
+  or machine learning methods.* BMJ, 2024.
   <https://www.tripod-statement.org>
-- **STARD 2015** — Bossuyt PM et al. *STARD 2015: an updated list of
-  essential items for reporting diagnostic accuracy studies.* BMJ, 2015.
+- STARD 2015: Bossuyt PM et al. *STARD 2015: an updated list of essential
+  items for reporting diagnostic accuracy studies.* BMJ, 2015.
   <https://www.equator-network.org/reporting-guidelines/stard/>
 
 ## License
