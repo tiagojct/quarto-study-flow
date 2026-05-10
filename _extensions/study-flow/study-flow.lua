@@ -291,18 +291,22 @@ local function build_consort(data)
   local y_analysis = y_follow + h_follow + SPACE_Y
   d.height = y_analysis + h_analysis + MARGIN
 
-  -- Enrolment row: assessed centred, excluded on the right
-  add_box(d, cx - BOX_W / 2, y_assessed, BOX_W, h_assessed, assessed_lines)
+  -- Enrolment row: assessed centred, excluded on the right.
+  -- Both boxes are vertically centred on the row so the branch arrow
+  -- connects them at the row's midline rather than dangling below the
+  -- shorter box.
+  local row1_main_top = y_assessed + (row1_h - h_assessed) / 2
+  local row1_side_top = y_assessed + (row1_h - h_excluded) / 2
+  local row1_cy       = y_assessed + row1_h / 2
+  add_box(d, cx - BOX_W / 2, row1_main_top, BOX_W, h_assessed, assessed_lines)
   local x_excl = W - MARGIN - BOX_W
-  add_box(d, x_excl, y_assessed, BOX_W, h_excluded, excluded_lines)
+  add_box(d, x_excl, row1_side_top, BOX_W, h_excluded, excluded_lines)
 
-  -- Main vertical down to randomised, with branch arrow to excluded
-  add_arrow(d, cx, y_assessed + h_assessed, cx, y_rand)
-  local cy_excluded = y_assessed + h_excluded / 2
-  local branch_y = math.max(cy_excluded, y_assessed + h_assessed + 8)
-  if branch_y < y_rand then
-    add_arrow(d, cx, branch_y, x_excl, branch_y)
-  end
+  -- Main vertical down to randomised, plus a horizontal branch arrow from
+  -- the assessed box's right edge to the excluded sidebar at the row's
+  -- midline.
+  add_arrow(d, cx, row1_main_top + h_assessed, cx, y_rand)
+  add_arrow(d, cx + BOX_W / 2, row1_cy, x_excl, row1_cy)
 
   -- Randomised box
   add_box(d, cx - BOX_W / 2, y_rand, BOX_W, h_rand, rand_lines)
@@ -442,33 +446,31 @@ local function build_strobe(data)
   end
   d.height = y + MARGIN
 
-  -- Place top stages
+  -- Place top stages. Both boxes are vertically centred on each row so the
+  -- branch arrow always meets both at the row's midline.
+  local function tstage_main_top(i) return y_top[i] + (top_h[i].row - top_h[i].main) / 2 end
+  local function tstage_side_top(i) return y_top[i] + (top_h[i].row - top_h[i].excl) / 2 end
+  local function tstage_cy(i)       return y_top[i] + top_h[i].row / 2 end
+
   for i, st in ipairs(top_stages) do
     local h  = top_h[i]
-    local sy = y_top[i]
-    add_box(d, cx - BOX_W / 2, sy, BOX_W, h.main, st.main)
+    local mtop = tstage_main_top(i)
+    add_box(d, cx - BOX_W / 2, mtop, BOX_W, h.main, st.main)
     if st.excluded then
       local x_excl = W - MARGIN - BOX_W
-      add_box(d, x_excl, sy, BOX_W, h.excl, st.excluded)
-      local cy_excl = sy + h.excl / 2
-      local branch_y = math.max(cy_excl, sy + h.main + 8)
-      local next_y = (i < #top_h) and y_top[i+1] or (n > 0 and y_alloc or nil)
-      if next_y and branch_y < next_y then
-        add_arrow(d, cx, branch_y, x_excl, branch_y)
-      else
-        -- fall back to side-of-box arrow
-        add_arrow(d, cx + BOX_W / 2, cy_excl, x_excl, cy_excl)
-      end
+      add_box(d, x_excl, tstage_side_top(i), BOX_W, h.excl, st.excluded)
+      local cy = tstage_cy(i)
+      add_arrow(d, cx + BOX_W / 2, cy, x_excl, cy)
     end
     if i < #top_h then
-      add_arrow(d, cx, sy + h.main, cx, y_top[i+1])
+      add_arrow(d, cx, mtop + h.main, cx, tstage_main_top(i+1))
     end
   end
 
   -- Connect last top stage to groups
   if n > 0 and #top_h > 0 then
     local last_i = #top_h
-    local bot_y  = y_top[last_i] + top_h[last_i].main
+    local bot_y  = tstage_main_top(last_i) + top_h[last_i].main
     if n == 1 then
       add_arrow(d, cx, bot_y, col_cx(1), y_alloc)
     else
@@ -598,32 +600,31 @@ local function build_tripod(data)
   y = y + h_c_out
   d.height = y + MARGIN
 
-  -- Spine
+  -- Spine. Both boxes per row are vertically centred so the branch arrow
+  -- always meets both at the row midline.
+  local function tstage_main_top(i) return y_top[i] + (top_h[i].row - top_h[i].main) / 2 end
+  local function tstage_side_top(i) return y_top[i] + (top_h[i].row - top_h[i].side) / 2 end
+  local function tstage_cy(i)       return y_top[i] + top_h[i].row / 2 end
+
   for i, st in ipairs(top_stages) do
     local h = top_h[i]
-    local sy = y_top[i]
-    add_box(d, cx - BOX_W / 2, sy, BOX_W, h.main, st.main)
+    local mtop = tstage_main_top(i)
+    add_box(d, cx - BOX_W / 2, mtop, BOX_W, h.main, st.main)
     if st.side then
       local x_side = W - MARGIN - BOX_W
-      add_box(d, x_side, sy, BOX_W, h.side, st.side)
-      local cy_side = sy + h.side / 2
-      local branch_y = math.max(cy_side, sy + h.main + 8)
-      local next_y = (i < #top_h) and y_top[i+1] or y_cohort_top
-      if branch_y < next_y then
-        add_arrow(d, cx, branch_y, x_side, branch_y)
-      else
-        add_arrow(d, cx + BOX_W / 2, cy_side, x_side, cy_side)
-      end
+      add_box(d, x_side, tstage_side_top(i), BOX_W, h.side, st.side)
+      local cy = tstage_cy(i)
+      add_arrow(d, cx + BOX_W / 2, cy, x_side, cy)
     end
     if i < #top_h then
-      add_arrow(d, cx, sy + h.main, cx, y_top[i+1])
+      add_arrow(d, cx, mtop + h.main, cx, tstage_main_top(i+1))
     end
   end
 
   -- Connect spine to cohort columns
   if #top_h > 0 then
     local last_i = #top_h
-    local bot_y = y_top[last_i] + top_h[last_i].main
+    local bot_y = tstage_main_top(last_i) + top_h[last_i].main
     if n == 1 then
       add_arrow(d, cx, bot_y, col_cx(1), y_cohort_top)
     else
@@ -739,25 +740,24 @@ local function build_stard(data)
   local y_grid = y
   d.height = y + grid_block_h + MARGIN
 
-  -- Spine
+  -- Spine. Vertically centre both boxes per row so the branch arrow always
+  -- meets both at the row midline.
+  local function srow_main_top(i) return y_pos[i] + (row_h[i].row - row_h[i].main) / 2 end
+  local function srow_side_top(i) return y_pos[i] + (row_h[i].row - row_h[i].side) / 2 end
+  local function srow_cy(i)       return y_pos[i] + row_h[i].row / 2 end
+
   for i, r in ipairs(spine_rows) do
-    local sy = y_pos[i]
     local h  = row_h[i]
-    add_box(d, cx - BOX_W / 2, sy, BOX_W, h.main, r.main)
+    local mtop = srow_main_top(i)
+    add_box(d, cx - BOX_W / 2, mtop, BOX_W, h.main, r.main)
     if r.side then
       local x_side = W - MARGIN - BOX_W
-      add_box(d, x_side, sy, BOX_W, h.side, r.side)
-      local cy_side = sy + h.side / 2
-      local next_y = (i < #spine_rows) and y_pos[i+1] or y_grid
-      local branch_y = math.max(cy_side, sy + h.main + 8)
-      if branch_y < next_y then
-        add_arrow(d, cx, branch_y, x_side, branch_y)
-      else
-        add_arrow(d, cx + BOX_W / 2, cy_side, x_side, cy_side)
-      end
+      add_box(d, x_side, srow_side_top(i), BOX_W, h.side, r.side)
+      local cy = srow_cy(i)
+      add_arrow(d, cx + BOX_W / 2, cy, x_side, cy)
     end
     if i < #spine_rows then
-      add_arrow(d, cx, sy + h.main, cx, y_pos[i+1])
+      add_arrow(d, cx, mtop + h.main, cx, srow_main_top(i+1))
     end
   end
 
@@ -772,9 +772,9 @@ local function build_stard(data)
   local cx_tp = cell_x1 + CELL_W / 2
   local cx_fp = cell_x2 + CELL_W / 2
 
-  -- Connection: spine → T-split into top of TP and FP cells
+  -- Connection: spine -> T-split into top of TP and FP cells
   local last_i = #spine_rows
-  local bot_y  = y_pos[last_i] + row_h[last_i].main
+  local bot_y  = srow_main_top(last_i) + row_h[last_i].main
   local y_split = (bot_y + col_y) / 2
   add_line(d, cx, bot_y, cx, y_split)
   local left_x  = math.min(cx, cx_tp)
@@ -912,17 +912,30 @@ local function build_prisma(data)
   end
   d.height = y - SPACE_Y + MARGIN
 
+  -- Vertically centre both boxes on the row's centre so the horizontal arrow
+  -- always connects two box edges, even when the side box is much taller
+  -- than the spine box (e.g. PRISMA row 1 with many "removed before
+  -- screening" reasons, or row 4 with many exclusion reasons).
+  local function main_top(i)
+    return y_pos[i] + (row_h[i].row - row_h[i].main) / 2
+  end
+  local function side_top(i)
+    return y_pos[i] + (row_h[i].row - row_h[i].side) / 2
+  end
+  local function row_cy(i)
+    return y_pos[i] + row_h[i].row / 2
+  end
+
   for i, r in ipairs(rows) do
-    local sy = y_pos[i]
-    local h  = row_h[i]
-    add_box(d, x_main, sy, BOX_W, h.main, r.main)
+    local mtop = main_top(i)
+    add_box(d, x_main, mtop, BOX_W, row_h[i].main, r.main)
     if r.side then
-      add_box(d, x_side, sy, BOX_W, h.side, r.side)
-      local cy_side = sy + h.side / 2
-      add_arrow(d, x_main + BOX_W, cy_side, x_side, cy_side)
+      add_box(d, x_side, side_top(i), BOX_W, row_h[i].side, r.side)
+      local cy = row_cy(i)
+      add_arrow(d, x_main + BOX_W, cy, x_side, cy)
     end
     if i < #rows then
-      add_arrow(d, cx_main, sy + h.main, cx_main, y_pos[i+1])
+      add_arrow(d, cx_main, mtop + row_h[i].main, cx_main, main_top(i+1))
     end
   end
 
