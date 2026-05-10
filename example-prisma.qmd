@@ -1,0 +1,38 @@
+---
+title: "PRISMA 2020 flow diagram example"
+format:
+  html:
+    toc: false
+  pdf:
+    pdf-engine: xelatex
+    toc: false
+study-flow:
+  type: prisma
+  identification:
+    databases: 1842
+    registers: 167
+    duplicates_removed: 612
+    ineligible_automation: 88
+    other_removed: 14
+  screening:
+    screened: 1295
+    excluded: 1024
+    sought_retrieval: 271
+    not_retrieved: 23
+    assessed: 248
+    excluded_with_reasons:
+      - "Wrong population (n=46)"
+      - "Wrong intervention (n=31)"
+      - "Wrong outcome (n=22)"
+      - "Wrong study design (n=18)"
+      - "Conference abstract only (n=11)"
+  included:
+    studies: 120
+    reports: 134
+---
+
+# Systematic review
+
+Study selection follows the PRISMA 2020 statement.
+
+{{< study-flow >}}

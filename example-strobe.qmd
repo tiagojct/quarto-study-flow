@@ -1,0 +1,50 @@
+---
+title: "STROBE flow diagram example"
+format:
+  html:
+    toc: false
+  pdf:
+    pdf-engine: xelatex
+    toc: false
+study-flow:
+  type: strobe
+  source:
+    label: "Source population"
+    n: 12500
+  eligible:
+    label: "Eligible cohort"
+    n: 8400
+    excluded: 4100
+    exclusion_reasons:
+      - "Outside age range (18-75): 2600"
+      - "Insufficient follow-up data: 1100"
+      - "Prior diagnosis: 400"
+  enrolled:
+    label: "Enrolled in study"
+    n: 7200
+    excluded: 1200
+    exclusion_reasons:
+      - "Declined consent: 900"
+      - "Could not be contacted: 300"
+  groups:
+    - label: "Exposed"
+      n: 3100
+      lost_followup: 220
+      lost_reasons:
+        - "Moved out of catchment: 140"
+        - "Withdrew consent: 80"
+      analysed: 2880
+    - label: "Unexposed"
+      n: 4100
+      lost_followup: 310
+      lost_reasons:
+        - "Moved out of catchment: 200"
+        - "Withdrew consent: 110"
+      analysed: 3790
+---
+
+# Cohort study
+
+Participant flow follows the STROBE statement for cohort studies.
+
+{{< study-flow >}}

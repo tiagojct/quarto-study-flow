@@ -1,0 +1,7 @@
+title: Study Flow
+author: Tiago Costa
+version: 1.0.0
+quarto-required: ">=1.4.0"
+contributes:
+  shortcodes:
+    - study-flow.lua
