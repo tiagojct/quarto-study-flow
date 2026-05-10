@@ -193,6 +193,11 @@ local function add_arrow(d, x1, y1, x2, y2)
   table.insert(d.elements, { kind = "arrow", x1 = x1, y1 = y1, x2 = x2, y2 = y2 })
 end
 
+-- Borderless text region (used for axis labels, e.g. STARD 2x2 headers)
+local function add_label(d, x, y, w, h, lines)
+  table.insert(d.elements, { kind = "label", x = x, y = y, w = w, h = h, lines = lines })
+end
+
 -- Append wrapped bullet items to an existing line list
 local function append_bullets(lines, items, wrap_w)
   if not items then return end
@@ -493,6 +498,309 @@ local function build_strobe(data)
 end
 
 -- ===========================================================================
+-- TRIPOD+AI 2024 layout (clinical prediction model studies)
+-- Optional Source/Eligible spine, then 1+ parallel cohort columns
+-- (e.g., development + external validation). Each cohort: identity row +
+-- outcome (events / no events) row.
+-- ===========================================================================
+
+local function build_tripod(data)
+  local d = new_diagram()
+
+  -- Optional top spine
+  local top_stages = {}
+  if data.source then
+    local s = data.source
+    local label = as_str(s.label, "Source population")
+    local main = wrap_text(label .. " (n=" .. as_str(s.n, "?") .. ")", WRAP_DEFAULT)
+    top_stages[#top_stages+1] = { main = main, side = nil }
+  end
+  if data.eligibility then
+    local e = data.eligibility
+    local label = as_str(e.label, "Eligible")
+    local main = wrap_text(label .. " (n=" .. as_str(e.n, "?") .. ")", WRAP_DEFAULT)
+    local side = nil
+    if e.excluded ~= nil or e.exclusion_reasons then
+      side = { "Excluded (n=" .. as_str(e.excluded, "?") .. ")" }
+      append_bullets(side, e.exclusion_reasons)
+    end
+    top_stages[#top_stages+1] = { main = main, side = side }
+  end
+
+  local cohorts = data.cohorts or {}
+  local n = #cohorts
+  if n < 1 then
+    quarto.log.warning("study-flow: TRIPOD requires at least one cohort")
+    return d
+  end
+
+  -- Per-cohort text: identity row + outcome row
+  local cohort_top, cohort_outcome = {}, {}
+  for i, c in ipairs(cohorts) do
+    local label = as_str(c.label, "Cohort " .. i)
+    local top = { label .. " (n=" .. as_str(c.n, "?") .. ")" }
+    if c.excluded_missing ~= nil or c.excluded_missing_reasons then
+      table.insert(top, "Excluded for missing data (n=" .. as_str(c.excluded_missing, "?") .. ")")
+      append_bullets(top, c.excluded_missing_reasons)
+    end
+    cohort_top[i] = top
+
+    local out = {}
+    if c.analysed ~= nil then
+      table.insert(out, "Analysed (n=" .. as_str(c.analysed) .. ")")
+    end
+    if c.events ~= nil then
+      table.insert(out, "With outcome (n=" .. as_str(c.events) .. ")")
+    end
+    if c.no_events ~= nil then
+      table.insert(out, "Without outcome (n=" .. as_str(c.no_events) .. ")")
+    end
+    if #out == 0 then table.insert(out, "Final analysis sample") end
+    cohort_outcome[i] = out
+  end
+
+  -- Heights
+  local top_h = {}
+  for i, st in ipairs(top_stages) do
+    local hm = box_height(st.main)
+    local hs = st.side and box_height(st.side) or 0
+    top_h[i] = { main = hm, side = hs, row = math.max(hm, hs) }
+  end
+  local h_c_top, h_c_out = 0, 0
+  for i = 1, n do
+    h_c_top = math.max(h_c_top, box_height(cohort_top[i]))
+    h_c_out = math.max(h_c_out, box_height(cohort_outcome[i]))
+  end
+
+  -- Layout: must avoid centred-spine / right-sidebar overlap (same rule as
+  -- CONSORT enrolment row)
+  local groups_w = n * BOX_W + (n - 1) * SPACE_X
+  local min_w_with_sidebar = 3 * BOX_W + 2 * SPACE_X + 2 * MARGIN
+  local W = math.max(groups_w + 2 * MARGIN, min_w_with_sidebar)
+  d.width = W
+  local cx = W / 2
+  local groups_start_x = (W - groups_w) / 2
+  local function col_x(i)  return groups_start_x + (i - 1) * (BOX_W + SPACE_X) end
+  local function col_cx(i) return col_x(i) + BOX_W / 2 end
+
+  -- Y positions
+  local y_top = {}
+  local y = MARGIN
+  for i, h in ipairs(top_h) do
+    y_top[i] = y
+    y = y + h.row
+    if i < #top_h then y = y + SPACE_Y end
+  end
+  if #top_h > 0 then y = y + SPACE_Y end
+  local y_cohort_top = y
+  y = y + h_c_top + SPACE_Y
+  local y_cohort_out = y
+  y = y + h_c_out
+  d.height = y + MARGIN
+
+  -- Spine
+  for i, st in ipairs(top_stages) do
+    local h = top_h[i]
+    local sy = y_top[i]
+    add_box(d, cx - BOX_W / 2, sy, BOX_W, h.main, st.main)
+    if st.side then
+      local x_side = W - MARGIN - BOX_W
+      add_box(d, x_side, sy, BOX_W, h.side, st.side)
+      local cy_side = sy + h.side / 2
+      local branch_y = math.max(cy_side, sy + h.main + 8)
+      local next_y = (i < #top_h) and y_top[i+1] or y_cohort_top
+      if branch_y < next_y then
+        add_arrow(d, cx, branch_y, x_side, branch_y)
+      else
+        add_arrow(d, cx + BOX_W / 2, cy_side, x_side, cy_side)
+      end
+    end
+    if i < #top_h then
+      add_arrow(d, cx, sy + h.main, cx, y_top[i+1])
+    end
+  end
+
+  -- Connect spine to cohort columns
+  if #top_h > 0 then
+    local last_i = #top_h
+    local bot_y = y_top[last_i] + top_h[last_i].main
+    if n == 1 then
+      add_arrow(d, cx, bot_y, col_cx(1), y_cohort_top)
+    else
+      local y_split = (bot_y + y_cohort_top) / 2
+      add_line(d, cx, bot_y, cx, y_split)
+      add_line(d, col_cx(1), y_split, col_cx(n), y_split)
+      for i = 1, n do
+        add_arrow(d, col_cx(i), y_split, col_cx(i), y_cohort_top)
+      end
+    end
+  end
+
+  -- Cohort rows
+  for i = 1, n do
+    add_box(d, col_x(i), y_cohort_top, BOX_W, h_c_top, cohort_top[i])
+    add_box(d, col_x(i), y_cohort_out, BOX_W, h_c_out, cohort_outcome[i])
+    add_arrow(d, col_cx(i), y_cohort_top + h_c_top, col_cx(i), y_cohort_out)
+  end
+
+  return d
+end
+
+-- ===========================================================================
+-- STARD 2015 layout (diagnostic accuracy studies)
+-- Four-row spine (Assessed, Enrolled, Index test, Reference standard) with
+-- optional right-side excluded/not-received sidebars, plus a 2x2 contingency
+-- grid (TP/FP/FN/TN) below with axis labels.
+-- ===========================================================================
+
+local function build_stard(data)
+  local d = new_diagram()
+
+  -- Spine row text
+  local assessed_lines = wrap_text(
+    "Assessed for eligibility (n=" .. as_str(data.assessed, "?") .. ")", WRAP_DEFAULT)
+
+  local excluded_lines = nil
+  if data.excluded ~= nil or data.exclusion_reasons then
+    excluded_lines = { "Excluded (n=" .. as_str(data.excluded, "?") .. ")" }
+    append_bullets(excluded_lines, data.exclusion_reasons)
+  end
+
+  local enrolled_lines = wrap_text(
+    "Enrolled (n=" .. as_str(data.enrolled, "?") .. ")", WRAP_DEFAULT)
+
+  local idx_n = data.index_test or data.enrolled
+  local index_lines = wrap_text(
+    "Received index test (n=" .. as_str(idx_n, "?") .. ")", WRAP_DEFAULT)
+
+  local not_idx_lines = nil
+  if data.not_index ~= nil or data.not_index_reasons then
+    not_idx_lines = { "Did not receive index test (n=" .. as_str(data.not_index, "?") .. ")" }
+    append_bullets(not_idx_lines, data.not_index_reasons)
+  end
+
+  local ref_n = data.reference_standard or idx_n
+  local ref_lines = wrap_text(
+    "Received reference standard (n=" .. as_str(ref_n, "?") .. ")", WRAP_DEFAULT)
+
+  local not_ref_lines = nil
+  if data.not_reference ~= nil or data.not_reference_reasons then
+    not_ref_lines = { "Did not receive reference standard (n=" .. as_str(data.not_reference, "?") .. ")" }
+    append_bullets(not_ref_lines, data.not_reference_reasons)
+  end
+
+  -- Outcomes (2x2)
+  local out = data.outcomes or {}
+  if not (out.true_positive or out.false_positive or out.false_negative or out.true_negative) then
+    quarto.log.warning("study-flow: STARD requires outcomes (true_positive, false_positive, false_negative, true_negative)")
+  end
+  local tp_text = "True positive (n=" .. as_str(out.true_positive, "?") .. ")"
+  local fp_text = "False positive (n=" .. as_str(out.false_positive, "?") .. ")"
+  local fn_text = "False negative (n=" .. as_str(out.false_negative, "?") .. ")"
+  local tn_text = "True negative (n=" .. as_str(out.true_negative, "?") .. ")"
+
+  local spine_rows = {
+    { main = assessed_lines, side = excluded_lines },
+    { main = enrolled_lines, side = nil },
+    { main = index_lines,    side = not_idx_lines },
+    { main = ref_lines,      side = not_ref_lines },
+  }
+
+  local row_h = {}
+  for i, r in ipairs(spine_rows) do
+    local hm = box_height(r.main)
+    local hs = r.side and box_height(r.side) or 0
+    row_h[i] = { main = hm, side = hs, row = math.max(hm, hs) }
+  end
+
+  -- 2x2 grid dimensions
+  local CELL_W = 200
+  local CELL_H = 60
+  local ROW_HDR_W = 140
+  local COL_HDR_H = 28
+  local grid_w = 2 * CELL_W
+  local grid_h = 2 * CELL_H
+  local grid_block_w = ROW_HDR_W + grid_w
+  local grid_block_h = COL_HDR_H + grid_h
+
+  local min_spine_w = 3 * BOX_W + 2 * SPACE_X + 2 * MARGIN
+  local min_grid_w  = grid_block_w + 2 * MARGIN
+  local W = math.max(min_spine_w, min_grid_w)
+  d.width = W
+  local cx = W / 2
+
+  -- Y positions
+  local y_pos = {}
+  local y = MARGIN
+  for i, h in ipairs(row_h) do
+    y_pos[i] = y
+    y = y + h.row + SPACE_Y
+  end
+  local y_grid = y
+  d.height = y + grid_block_h + MARGIN
+
+  -- Spine
+  for i, r in ipairs(spine_rows) do
+    local sy = y_pos[i]
+    local h  = row_h[i]
+    add_box(d, cx - BOX_W / 2, sy, BOX_W, h.main, r.main)
+    if r.side then
+      local x_side = W - MARGIN - BOX_W
+      add_box(d, x_side, sy, BOX_W, h.side, r.side)
+      local cy_side = sy + h.side / 2
+      local next_y = (i < #spine_rows) and y_pos[i+1] or y_grid
+      local branch_y = math.max(cy_side, sy + h.main + 8)
+      if branch_y < next_y then
+        add_arrow(d, cx, branch_y, x_side, branch_y)
+      else
+        add_arrow(d, cx + BOX_W / 2, cy_side, x_side, cy_side)
+      end
+    end
+    if i < #spine_rows then
+      add_arrow(d, cx, sy + h.main, cx, y_pos[i+1])
+    end
+  end
+
+  -- 2x2 grid block centred under spine
+  local grid_x_start = cx - grid_block_w / 2
+  local rh_x   = grid_x_start
+  local cell_x1 = rh_x + ROW_HDR_W
+  local cell_x2 = cell_x1 + CELL_W
+  local col_y   = y_grid
+  local cell_y1 = col_y + COL_HDR_H
+  local cell_y2 = cell_y1 + CELL_H
+  local cx_tp = cell_x1 + CELL_W / 2
+  local cx_fp = cell_x2 + CELL_W / 2
+
+  -- Connection: spine → T-split into top of TP and FP cells
+  local last_i = #spine_rows
+  local bot_y  = y_pos[last_i] + row_h[last_i].main
+  local y_split = (bot_y + col_y) / 2
+  add_line(d, cx, bot_y, cx, y_split)
+  local left_x  = math.min(cx, cx_tp)
+  local right_x = math.max(cx, cx_fp)
+  add_line(d, left_x, y_split, right_x, y_split)
+  -- Arrows stop at the top of the column header strip so the header text
+  -- isn't overprinted by the arrow line.
+  add_arrow(d, cx_tp, y_split, cx_tp, col_y)
+  add_arrow(d, cx_fp, y_split, cx_fp, col_y)
+
+  -- Column headers (above cells)
+  add_label(d, cell_x1, col_y, CELL_W, COL_HDR_H, { "Reference standard +" })
+  add_label(d, cell_x2, col_y, CELL_W, COL_HDR_H, { "Reference standard \xe2\x88\x92" })
+  -- Row headers (left of cells)
+  add_label(d, rh_x, cell_y1, ROW_HDR_W, CELL_H, { "Index test +" })
+  add_label(d, rh_x, cell_y2, ROW_HDR_W, CELL_H, { "Index test \xe2\x88\x92" })
+  -- 2x2 cells (touching, no gap)
+  add_box(d, cell_x1, cell_y1, CELL_W, CELL_H, { tp_text })
+  add_box(d, cell_x2, cell_y1, CELL_W, CELL_H, { fp_text })
+  add_box(d, cell_x1, cell_y2, CELL_W, CELL_H, { fn_text })
+  add_box(d, cell_x2, cell_y2, CELL_W, CELL_H, { tn_text })
+
+  return d
+end
+
+-- ===========================================================================
 -- PRISMA 2020 layout (systematic review)
 -- ===========================================================================
 
@@ -651,6 +959,15 @@ local function render_svg(d)
           fmt_num(e.x + e.w / 2), fmt_num(first_y + (i - 1) * LINE_HEIGHT),
           FONT_SIZE, xml_escape(line))
       end
+    elseif e.kind == "label" then
+      local total = #e.lines * LINE_HEIGHT
+      local first_y = e.y + (e.h - total) / 2 + FONT_SIZE - 2
+      for i, line in ipairs(e.lines) do
+        p[#p+1] = string.format(
+          '<text x="%s" y="%s" font-size="%d" text-anchor="middle" fill="black">%s</text>',
+          fmt_num(e.x + e.w / 2), fmt_num(first_y + (i - 1) * LINE_HEIGHT),
+          FONT_SIZE, xml_escape(line))
+      end
     elseif e.kind == "line" then
       p[#p+1] = string.format(
         '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="black" stroke-width="1.2"/>',
@@ -697,6 +1014,15 @@ local function render_tikz(d)
         fmt_num(e.w - 2 * PAD_X), FONT_SIZE, LINE_HEIGHT,
         fmt_num(e.x + e.w / 2), fmt_num(e.y + e.h / 2),
         content)
+    elseif e.kind == "label" then
+      local escaped = {}
+      for i, line in ipairs(e.lines) do escaped[i] = tex_escape(line) end
+      local content = table.concat(escaped, " \\\\ ")
+      p[#p+1] = string.format(
+        "\\node[align=center, text width=%spt, font=\\fontsize{%d}{%d}\\selectfont] at (%s, %s) {%s};",
+        fmt_num(e.w - 2 * PAD_X), FONT_SIZE, LINE_HEIGHT,
+        fmt_num(e.x + e.w / 2), fmt_num(e.y + e.h / 2),
+        content)
     elseif e.kind == "line" then
       p[#p+1] = string.format(
         "\\draw (%s, %s) -- (%s, %s);",
@@ -722,6 +1048,8 @@ local builders = {
   consort = build_consort,
   strobe  = build_strobe,
   prisma  = build_prisma,
+  tripod  = build_tripod,
+  stard   = build_stard,
 }
 
 local tikz_setup_done = false
@@ -749,7 +1077,7 @@ return {
 
     local builder = builders[as_str(data.type):lower()]
     if not builder then
-      quarto.log.warning("study-flow: unknown type '" .. as_str(data.type) .. "' (expected consort, strobe, or prisma)")
+      quarto.log.warning("study-flow: unknown type '" .. as_str(data.type) .. "' (expected consort, strobe, prisma, tripod, or stard)")
       return pandoc.Null()
     end
 

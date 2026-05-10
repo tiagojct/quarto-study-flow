@@ -1,0 +1,41 @@
+---
+title: "STARD 2015 flow diagram example"
+format:
+  html:
+    toc: false
+  pdf:
+    pdf-engine: xelatex
+    toc: false
+study-flow:
+  type: stard
+  assessed: 612
+  excluded: 137
+  exclusion_reasons:
+    - "Did not meet inclusion criteria: 92"
+    - "Declined consent: 34"
+    - "Withdrew before testing: 11"
+  enrolled: 475
+  index_test: 461
+  not_index: 14
+  not_index_reasons:
+    - "Equipment malfunction: 8"
+    - "Sample not collected: 6"
+  reference_standard: 442
+  not_reference: 19
+  not_reference_reasons:
+    - "Refused reference test: 12"
+    - "Reference test contraindicated: 7"
+  outcomes:
+    true_positive: 148
+    false_positive: 41
+    false_negative: 27
+    true_negative: 226
+---
+
+# Diagnostic accuracy study
+
+Participant flow follows the STARD 2015 statement for diagnostic accuracy
+studies. The 2×2 contingency grid at the bottom enables calculation of
+sensitivity, specificity, and predictive values.
+
+{{< study-flow >}}

@@ -1,8 +1,16 @@
 # quarto-study-flow
 
-A Quarto shortcode extension that renders **CONSORT**, **STROBE**, and
-**PRISMA 2020** participant-flow diagrams from structured YAML declared in the
-document frontmatter.
+A Quarto shortcode extension that renders participant-flow diagrams from
+structured YAML declared in the document frontmatter. Five reporting
+guidelines are supported:
+
+| `type:`   | Guideline                            | Used for                       |
+| --------- | ------------------------------------ | ------------------------------ |
+| `consort` | **CONSORT 2025** (supersedes 2010)   | Randomised controlled trials   |
+| `strobe`  | STROBE (with optional groups)        | Observational studies          |
+| `prisma`  | **PRISMA 2020**                      | Systematic reviews             |
+| `tripod`  | **TRIPOD+AI 2024** (supersedes 2015) | Clinical prediction models     |
+| `stard`   | **STARD 2015**                       | Diagnostic accuracy studies    |
 
 - Pure Lua. No `graphviz`, no `rsvg-convert`, no shell-outs, no Python — zero
   external dependencies.
@@ -68,10 +76,11 @@ study-flow:
 {{< study-flow >}}
 ```
 
-The CONSORT layout follows the four canonical rows from the CONSORT 2010
-statement: **Enrolment → Allocation → Follow-up → Analysis**, with a side
-arrow from Enrolment to the *Excluded* box, and N parallel columns (one per
-arm) under *Randomised*.
+The CONSORT layout follows the four canonical rows from the CONSORT 2025
+statement (which supersedes CONSORT 2010 with no structural change to the
+flow diagram): **Enrolment → Allocation → Follow-up → Analysis**, with a
+side arrow from Enrolment to the *Excluded* box, and N parallel columns
+(one per arm) under *Randomised*.
 
 ### STROBE
 
@@ -147,6 +156,80 @@ the main spine —
 Studies included** — and *Excluded* / *Removed* boxes branching to the right
 at each step. Any field you omit collapses the corresponding box.
 
+### TRIPOD+AI
+
+```yaml
+---
+study-flow:
+  type: tripod
+  source:
+    label: "Source population"
+    n: 18450
+  eligibility:
+    n: 14210
+    excluded: 4240
+    exclusion_reasons:
+      - "Outside age range: 1850"
+      - "No baseline measurement: 1620"
+  cohorts:
+    - label: "Development cohort"
+      n: 9420
+      excluded_missing: 380
+      analysed: 9040
+      events: 412
+      no_events: 8628
+    - label: "External validation cohort"
+      n: 4790
+      analysed: 4695
+      events: 233
+      no_events: 4462
+---
+```
+
+TRIPOD+AI 2024 supersedes TRIPOD 2015 and applies to studies developing,
+validating, or updating a clinical prediction model (whether regression or
+machine-learning based). The diagram puts an optional **Source → Eligible**
+spine at the top, then splits into 1+ parallel cohort columns (typically
+*development* and *external validation*), each with its own outcome
+breakdown row.
+
+### STARD 2015
+
+```yaml
+---
+study-flow:
+  type: stard
+  assessed: 612
+  excluded: 137
+  exclusion_reasons:
+    - "Did not meet inclusion criteria: 92"
+    - "Declined consent: 34"
+  enrolled: 475
+  index_test: 461
+  not_index: 14
+  not_index_reasons:
+    - "Equipment malfunction: 8"
+    - "Sample not collected: 6"
+  reference_standard: 442
+  not_reference: 19
+  not_reference_reasons:
+    - "Refused reference test: 12"
+  outcomes:
+    true_positive: 148
+    false_positive: 41
+    false_negative: 27
+    true_negative: 226
+---
+```
+
+The STARD layout follows the canonical STARD 2015 prototypical diagram with
+a four-row spine —
+**Assessed for eligibility → Enrolled → Received index test → Received
+reference standard** — each with optional right-side *Excluded* / *Did not
+receive* sidebars, and a 2×2 contingency grid at the bottom (TP / FP / FN /
+TN) with `Reference standard +/−` column headers and `Index test +/−` row
+headers.
+
 ## Output formats
 
 | Format        | Renderer | Notes                                       |
@@ -167,6 +250,8 @@ This repository contains:
 - `example-consort.qmd`
 - `example-strobe.qmd`
 - `example-prisma.qmd`
+- `example-tripod.qmd`
+- `example-stard.qmd`
 
 Render any of them with:
 
@@ -239,6 +324,49 @@ screening:
 included:
   studies:                number   # optional
   reports:                number   # optional
+```
+
+### TRIPOD+AI
+
+```
+type: tripod
+source:                                    # optional
+  label:               string
+  n:                   number
+eligibility:                               # optional
+  label:               string
+  n:                   number
+  excluded:            number              # optional
+  exclusion_reasons:   [string]            # optional
+cohorts:                                   # required, 1+ entries
+  - label:                       string
+    n:                           number
+    excluded_missing:            number    # optional
+    excluded_missing_reasons:    [string]  # optional
+    analysed:                    number    # optional
+    events:                      number    # optional
+    no_events:                   number    # optional
+```
+
+### STARD
+
+```
+type: stard
+assessed:                  number          # required
+excluded:                  number          # optional (sidebar)
+exclusion_reasons:         [string]
+enrolled:                  number          # required
+index_test:                number          # optional, defaults to enrolled
+not_index:                 number          # optional (sidebar)
+not_index_reasons:         [string]
+reference_standard:        number          # optional, defaults to index_test
+not_reference:             number          # optional (sidebar)
+not_reference_reasons:     [string]
+outcomes:                                  # required
+  true_positive:           number
+  false_positive:          number
+  false_negative:          number
+  true_negative:           number
 ```
 
 ## License
