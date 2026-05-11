@@ -51,17 +51,30 @@ local function wrap_text(s, max_chars)
       -- skip empty paragraphs entirely
     else
       local current = ""
-      for _, w in ipairs(words) do
+      local function flush_current()
+        if #current > 0 then lines[#lines + 1] = current end
+        current = ""
+      end
+      -- Hard-break words that don't fit on a single line on their own
+      -- (URLs, long compound names, doi strings) so they don't overflow
+      -- the box border.
+      local function emit_word(w)
+        while #w > max_chars do
+          flush_current()
+          lines[#lines + 1] = w:sub(1, max_chars)
+          w = w:sub(max_chars + 1)
+        end
         if #current == 0 then
           current = w
         elseif #current + 1 + #w <= max_chars then
           current = current .. " " .. w
         else
-          lines[#lines + 1] = current
+          flush_current()
           current = w
         end
       end
-      if #current > 0 then lines[#lines + 1] = current end
+      for _, w in ipairs(words) do emit_word(w) end
+      flush_current()
     end
   end
   if #lines == 0 then lines[1] = "" end
@@ -809,57 +822,61 @@ local function build_prisma(data)
   local ident  = data.identification or {}
   local screen = data.screening      or {}
   local inc    = data.included       or {}
+  local other  = data.other_methods  -- optional parallel "other methods" column
 
-  local rows = {}  -- list of { main = lines, side = lines or nil }
+  -- Each row tracks: stage name (for matching with the parallel column),
+  -- left-column main + optional sidebar.
+  local rows = {}
 
-  -- Row 1: Records identified
-  local box1 = { "Records identified from:" }
-  if ident.databases ~= nil then
-    table.insert(box1, "Databases (n=" .. as_str(ident.databases) .. ")")
-  end
-  if ident.registers ~= nil then
-    table.insert(box1, "Registers (n=" .. as_str(ident.registers) .. ")")
-  end
-  if #box1 == 1 then table.insert(box1, "(n=?)") end
+  local has_id_counts = ident.databases ~= nil or ident.registers ~= nil
+  local has_id_removals = ident.duplicates_removed ~= nil
+                       or ident.ineligible_automation ~= nil
+                       or ident.other_removed ~= nil
 
-  local side1 = nil
-  if ident.duplicates_removed ~= nil
-      or ident.ineligible_automation ~= nil
-      or ident.other_removed ~= nil then
-    side1 = { "Records removed before screening:" }
-    if ident.duplicates_removed ~= nil then
-      append_bullets(side1, { "Duplicate records removed (n=" .. as_str(ident.duplicates_removed) .. ")" })
+  if has_id_counts or has_id_removals then
+    local box1 = { "Records identified from:" }
+    if ident.databases ~= nil then
+      table.insert(box1, "Databases (n=" .. as_str(ident.databases) .. ")")
     end
-    if ident.ineligible_automation ~= nil then
-      append_bullets(side1, { "Records marked ineligible by automation tools (n=" .. as_str(ident.ineligible_automation) .. ")" })
+    if ident.registers ~= nil then
+      table.insert(box1, "Registers (n=" .. as_str(ident.registers) .. ")")
     end
-    if ident.other_removed ~= nil then
-      append_bullets(side1, { "Records removed for other reasons (n=" .. as_str(ident.other_removed) .. ")" })
-    end
-  end
-  table.insert(rows, { main = box1, side = side1 })
+    if #box1 == 1 then table.insert(box1, "(n=?)") end
 
-  -- Row 2: Records screened
+    local side1 = nil
+    if has_id_removals then
+      side1 = { "Records removed before screening:" }
+      if ident.duplicates_removed ~= nil then
+        append_bullets(side1, { "Duplicate records removed (n=" .. as_str(ident.duplicates_removed) .. ")" })
+      end
+      if ident.ineligible_automation ~= nil then
+        append_bullets(side1, { "Records marked ineligible by automation tools (n=" .. as_str(ident.ineligible_automation) .. ")" })
+      end
+      if ident.other_removed ~= nil then
+        append_bullets(side1, { "Records removed for other reasons (n=" .. as_str(ident.other_removed) .. ")" })
+      end
+    end
+    table.insert(rows, { stage = "identification", main = box1, side = side1 })
+  end
+
   if screen.screened ~= nil then
     local main = wrap_text("Records screened (n=" .. as_str(screen.screened) .. ")", WRAP_DEFAULT)
     local side = nil
     if screen.excluded ~= nil then
       side = wrap_text("Records excluded (n=" .. as_str(screen.excluded) .. ")", WRAP_DEFAULT)
     end
-    table.insert(rows, { main = main, side = side })
+    table.insert(rows, { stage = "screened", main = main, side = side })
   end
 
-  -- Row 3: Reports sought for retrieval
   if screen.sought_retrieval ~= nil then
     local main = wrap_text("Reports sought for retrieval (n=" .. as_str(screen.sought_retrieval) .. ")", WRAP_DEFAULT)
     local side = nil
     if screen.not_retrieved ~= nil then
       side = wrap_text("Reports not retrieved (n=" .. as_str(screen.not_retrieved) .. ")", WRAP_DEFAULT)
     end
-    table.insert(rows, { main = main, side = side })
+    table.insert(rows, { stage = "sought", main = main, side = side })
   end
 
-  -- Row 4: Reports assessed for eligibility
   if screen.assessed ~= nil then
     local main = wrap_text("Reports assessed for eligibility (n=" .. as_str(screen.assessed) .. ")", WRAP_DEFAULT)
     local side = nil
@@ -867,10 +884,11 @@ local function build_prisma(data)
       side = { "Reports excluded:" }
       append_bullets(side, screen.excluded_with_reasons)
     end
-    table.insert(rows, { main = main, side = side })
+    table.insert(rows, { stage = "assessed", main = main, side = side })
   end
 
-  -- Row 5: Studies included in review
+  -- Final "Studies included" row (always last; spans both columns when the
+  -- parallel column is present).
   local box5 = nil
   if inc.studies ~= nil or inc.reports ~= nil then
     box5 = {}
@@ -883,25 +901,94 @@ local function build_prisma(data)
       for _, ln in ipairs(w) do table.insert(box5, ln) end
     end
   end
-  if box5 then table.insert(rows, { main = box5, side = nil }) end
+  if box5 then
+    table.insert(rows, { stage = "included", main = box5, side = nil })
+  end
 
   if #rows == 0 then
     quarto.log.warning("study-flow: PRISMA requires at least one populated row")
     return d
   end
 
+  -- ---------------------------------------------------------------------
+  -- Optional parallel "Identification via other methods" column. Renders
+  -- to the right of the main spine and joins back into the final
+  -- "Studies included" box. Right-column rows align vertically with the
+  -- left-column rows that share the same stage name.
+  -- ---------------------------------------------------------------------
+  local right_rows_by_stage = {}
+  local has_other = false
+  if other then
+    local has_other_id = other.websites ~= nil
+                      or other.organisations ~= nil
+                      or other.citation_searching ~= nil
+    if has_other_id then
+      local r_main = { "Identification of studies via other methods:" }
+      if other.websites ~= nil then
+        table.insert(r_main, "Websites (n=" .. as_str(other.websites) .. ")")
+      end
+      if other.organisations ~= nil then
+        table.insert(r_main, "Organisations (n=" .. as_str(other.organisations) .. ")")
+      end
+      if other.citation_searching ~= nil then
+        table.insert(r_main, "Citation searching (n=" .. as_str(other.citation_searching) .. ")")
+      end
+      right_rows_by_stage["identification"] = { main = r_main, side = nil }
+      has_other = true
+    end
+    if other.sought_retrieval ~= nil then
+      local r_main = wrap_text("Reports sought for retrieval (n=" .. as_str(other.sought_retrieval) .. ")", WRAP_DEFAULT)
+      local r_side = nil
+      if other.not_retrieved ~= nil then
+        r_side = wrap_text("Reports not retrieved (n=" .. as_str(other.not_retrieved) .. ")", WRAP_DEFAULT)
+      end
+      right_rows_by_stage["sought"] = { main = r_main, side = r_side }
+      has_other = true
+    end
+    if other.assessed ~= nil then
+      local r_main = wrap_text("Reports assessed for eligibility (n=" .. as_str(other.assessed) .. ")", WRAP_DEFAULT)
+      local r_side = nil
+      if other.excluded_with_reasons then
+        r_side = { "Reports excluded:" }
+        append_bullets(r_side, other.excluded_with_reasons)
+      end
+      right_rows_by_stage["assessed"] = { main = r_main, side = r_side }
+      has_other = true
+    end
+  end
+
+  -- ---------------------------------------------------------------------
   -- Layout
-  local W = BOX_W * 2 + SPACE_X + 2 * MARGIN
+  -- ---------------------------------------------------------------------
+  local W
+  if has_other then
+    W = 4 * BOX_W + 3 * SPACE_X + 2 * MARGIN
+  else
+    W = 2 * BOX_W + SPACE_X + 2 * MARGIN
+  end
   d.width = W
+
   local x_main  = MARGIN
   local x_side  = MARGIN + BOX_W + SPACE_X
-  local cx_main = x_main + BOX_W / 2
+  local x_other_main = MARGIN + 2 * (BOX_W + SPACE_X)
+  local x_other_side = MARGIN + 3 * (BOX_W + SPACE_X)
+  local cx_main  = x_main + BOX_W / 2
+  local cx_other = x_other_main + BOX_W / 2
 
+  -- Per-row height = max of all four boxes (left main, left side,
+  -- right main, right side) so the parallel rows align vertically.
   local row_h = {}
   for i, r in ipairs(rows) do
     local hm = box_height(r.main)
     local hs = r.side and box_height(r.side) or 0
-    row_h[i] = { main = hm, side = hs, row = math.max(hm, hs) }
+    local right = right_rows_by_stage[r.stage]
+    local hrm = (right and right.main) and box_height(right.main) or 0
+    local hrs = (right and right.side) and box_height(right.side) or 0
+    row_h[i] = {
+      main = hm, side = hs,
+      right_main = hrm, right_side = hrs,
+      row = math.max(hm, hs, hrm, hrs),
+    }
   end
 
   local y_pos = {}
@@ -912,30 +999,89 @@ local function build_prisma(data)
   end
   d.height = y - SPACE_Y + MARGIN
 
-  -- Vertically centre both boxes on the row's centre so the horizontal arrow
-  -- always connects two box edges, even when the side box is much taller
-  -- than the spine box (e.g. PRISMA row 1 with many "removed before
-  -- screening" reasons, or row 4 with many exclusion reasons).
-  local function main_top(i)
-    return y_pos[i] + (row_h[i].row - row_h[i].main) / 2
-  end
-  local function side_top(i)
-    return y_pos[i] + (row_h[i].row - row_h[i].side) / 2
-  end
-  local function row_cy(i)
-    return y_pos[i] + row_h[i].row / 2
+  -- Vertically centre every box on its row's centre so horizontal arrows
+  -- always connect at the row midline.
+  local function row_cy(i)        return y_pos[i] + row_h[i].row / 2 end
+  local function main_top(i)      return y_pos[i] + (row_h[i].row - row_h[i].main) / 2 end
+  local function side_top(i)      return y_pos[i] + (row_h[i].row - row_h[i].side) / 2 end
+  local function rmain_top(i)     return y_pos[i] + (row_h[i].row - row_h[i].right_main) / 2 end
+  local function rside_top(i)     return y_pos[i] + (row_h[i].row - row_h[i].right_side) / 2 end
+
+  -- For convergence at the final "included" row, find the previous row
+  -- index in the right column that has a main box.
+  local function prev_right_main_row(i)
+    for j = i - 1, 1, -1 do
+      if right_rows_by_stage[rows[j].stage] then return j end
+    end
+    return nil
   end
 
   for i, r in ipairs(rows) do
     local mtop = main_top(i)
-    add_box(d, x_main, mtop, BOX_W, row_h[i].main, r.main)
+
+    -- Final "included" row spans both columns when other_methods is
+    -- present, so the box sits centred in the diagram.
+    if r.stage == "included" and has_other then
+      local span_w = 4 * BOX_W + 3 * SPACE_X
+      local x_span = MARGIN
+      add_box(d, x_span, mtop, span_w, row_h[i].main, r.main)
+    else
+      add_box(d, x_main, mtop, BOX_W, row_h[i].main, r.main)
+    end
+
     if r.side then
       add_box(d, x_side, side_top(i), BOX_W, row_h[i].side, r.side)
       local cy = row_cy(i)
       add_arrow(d, x_main + BOX_W, cy, x_side, cy)
     end
+
+    -- Right (parallel) column for this stage, if any
+    local right = right_rows_by_stage[r.stage]
+    if right then
+      add_box(d, x_other_main, rmain_top(i), BOX_W, row_h[i].right_main, right.main)
+      if right.side then
+        add_box(d, x_other_side, rside_top(i), BOX_W, row_h[i].right_side, right.side)
+        local cy = row_cy(i)
+        add_arrow(d, x_other_main + BOX_W, cy, x_other_side, cy)
+      end
+    end
+
+    -- Vertical arrow to the next row in the LEFT column (skips when this
+    -- row's left main is being replaced by a spanning "included" box).
     if i < #rows then
-      add_arrow(d, cx_main, mtop + row_h[i].main, cx_main, main_top(i+1))
+      local next_r = rows[i + 1]
+      if next_r.stage == "included" and has_other then
+        -- Arrow from this row down to the spanning included box's top.
+        local target_cx = MARGIN + (4 * BOX_W + 3 * SPACE_X) / 2
+        -- Use straight vertical arrow from left column.
+        add_arrow(d, cx_main, mtop + row_h[i].main, cx_main, main_top(i+1))
+      else
+        add_arrow(d, cx_main, mtop + row_h[i].main, cx_main, main_top(i+1))
+      end
+    end
+
+    -- Vertical arrow within the right column (between consecutive
+    -- right-column rows). Find the next right-column row.
+    if right then
+      local next_right_i = nil
+      for j = i + 1, #rows do
+        if right_rows_by_stage[rows[j].stage] or rows[j].stage == "included" then
+          next_right_i = j
+          break
+        end
+      end
+      if next_right_i then
+        local nr = rows[next_right_i]
+        if nr.stage == "included" then
+          -- Convergence arrow: from right column bottom to the included
+          -- box's top edge (above its centre).
+          add_arrow(d, cx_other, rmain_top(i) + row_h[i].right_main,
+                       cx_other, main_top(next_right_i))
+        else
+          add_arrow(d, cx_other, rmain_top(i) + row_h[i].right_main,
+                       cx_other, rmain_top(next_right_i))
+        end
+      end
     end
   end
 
@@ -952,12 +1098,20 @@ local function fmt_num(x)
   return string.format("%.2f", x)
 end
 
+-- Monotonically incremented per render_svg call so multiple {{< study-flow >}}
+-- shortcodes in the same HTML document don't collide on the marker id.
+local svg_render_counter = 0
+
 local function render_svg(d)
+  svg_render_counter = svg_render_counter + 1
+  local marker_id = "sf-arrow-" .. tostring(svg_render_counter)
   local p = {}
   p[#p+1] = string.format(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %s %s" width="100%%" preserveAspectRatio="xMidYMid meet" font-family="Helvetica, Arial, sans-serif">',
     fmt_num(d.width), fmt_num(d.height))
-  p[#p+1] = '<defs><marker id="sf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>'
+  p[#p+1] = string.format(
+    '<defs><marker id="%s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000"/></marker></defs>',
+    marker_id)
 
   for _, e in ipairs(d.elements) do
     if e.kind == "box" then
@@ -987,8 +1141,8 @@ local function render_svg(d)
         fmt_num(e.x1), fmt_num(e.y1), fmt_num(e.x2), fmt_num(e.y2))
     elseif e.kind == "arrow" then
       p[#p+1] = string.format(
-        '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="black" stroke-width="1.2" marker-end="url(#sf-arrow)"/>',
-        fmt_num(e.x1), fmt_num(e.y1), fmt_num(e.x2), fmt_num(e.y2))
+        '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="black" stroke-width="1.2" marker-end="url(#%s)"/>',
+        fmt_num(e.x1), fmt_num(e.y1), fmt_num(e.x2), fmt_num(e.y2), marker_id)
     end
   end
 
@@ -1096,15 +1250,33 @@ return {
 
     local diagram = builder(data)
 
+    -- Bug guard: a builder that bailed on missing required fields returns
+    -- a zero-size diagram. Render a visible warning block instead of an
+    -- invisible empty SVG so the user actually notices.
+    if diagram.width == 0 or diagram.height == 0 or #diagram.elements == 0 then
+      local msg = "study-flow: diagram for type '" .. as_str(data.type)
+                  .. "' could not be built (check console for details)."
+      quarto.log.warning(msg)
+      if quarto.doc.is_format("latex") or quarto.doc.is_format("pdf") or quarto.doc.is_format("beamer") then
+        return pandoc.RawBlock("latex",
+          "\\begin{center}\\fbox{\\textbf{" .. tex_escape(msg) .. "}}\\end{center}")
+      end
+      return pandoc.RawBlock("html",
+        '<div class="study-flow-figure study-flow-error" style="border:1px solid #c00;padding:0.5em;color:#c00;">'
+        .. xml_escape(msg) .. '</div>')
+    end
+
+    -- Render the body (SVG for HTML-like formats, TikZ for LaTeX-like).
+    local body
     if quarto.doc.is_format("html") or quarto.doc.is_format("html:js") or quarto.doc.is_format("revealjs") then
-      local svg = render_svg(diagram)
-      return pandoc.RawBlock("html", '<div class="study-flow-figure">' .. svg .. "</div>")
+      body = pandoc.RawBlock("html", '<div class="study-flow-figure">' .. render_svg(diagram) .. "</div>")
     elseif quarto.doc.is_format("latex") or quarto.doc.is_format("pdf") or quarto.doc.is_format("beamer") then
       ensure_tikz_setup()
-      return pandoc.RawBlock("latex", render_tikz(diagram))
+      body = pandoc.RawBlock("latex", render_tikz(diagram))
     else
-      -- Fallback: ship raw SVG and hope the writer accepts HTML passthrough
-      return pandoc.RawBlock("html", render_svg(diagram))
+      body = pandoc.RawBlock("html", render_svg(diagram))
     end
+
+    return body
   end,
 }

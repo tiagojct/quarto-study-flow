@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "quarto-study-flow"
+abstract: >-
+  A Quarto shortcode extension that renders CONSORT, STROBE, PRISMA 2020,
+  TRIPOD+AI, and STARD participant-flow diagrams from structured YAML in
+  the document frontmatter. Pure Lua, with inline SVG output for HTML and
+  native TikZ output for LaTeX/PDF; no external rendering dependencies.
+authors:
+  - family-names: "Jacinto"
+    given-names: "Tiago"
+    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"  # uncomment and fill in
+version: "1.1.0"
+date-released: "2026-05-11"
+license: MIT
+type: software
+repository-code: "https://github.com/tiagojct/quarto-study-flow"
+url: "https://github.com/tiagojct/quarto-study-flow"
+keywords:
+  - quarto
+  - quarto-extension
+  - reporting-guidelines
+  - CONSORT
+  - PRISMA
+  - STROBE
+  - TRIPOD
+  - STARD
+  - clinical-research
+  - biomedical-research
+  - participant-flow-diagram

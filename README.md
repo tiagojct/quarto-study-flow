@@ -188,9 +188,18 @@ study-flow:
       - "Wrong population (n=46)"
       - "Wrong intervention (n=31)"
       - "Wrong outcome (n=22)"
+  other_methods:               # optional parallel column (grey literature etc.)
+    websites: 12
+    organisations: 8
+    citation_searching: 25
+    sought_retrieval: 41
+    not_retrieved: 3
+    assessed: 38
+    excluded_with_reasons:
+      - "Wrong population (n=5)"
   included:
-    studies: 120
-    reports: 134
+    studies: 134
+    reports: 142
 ```
 
 The PRISMA layout follows the canonical PRISMA 2020 flow with five rows
@@ -198,6 +207,11 @@ on the main spine: **Records identified, Records screened, Reports
 sought, Reports assessed, Studies included**. *Excluded* and *Removed*
 boxes branch to the right at each step. Any field you omit collapses the
 corresponding box.
+
+For reviews that also search grey literature, citation chains, or
+organisational websites, add an `other_methods` block. It renders as a
+**parallel column on the right** that converges into the final *Studies
+included* box, matching the PRISMA 2020 v2 template.
 
 ### TRIPOD+AI
 
@@ -267,6 +281,25 @@ index test, Received reference standard**. Each row can have an optional
 right-side *Excluded* or *Did not receive* sidebar. Below the spine sits
 a 2×2 contingency grid (TP, FP, FN, TN) with `Reference standard +/−`
 column headers and `Index test +/−` row headers.
+
+## Figure captions and cross-references
+
+Wrap the shortcode in a Quarto figure div to give the diagram a caption,
+a number, and a cross-referenceable label:
+
+````markdown
+::: {#fig-trial}
+{{< study-flow >}}
+
+Participant flow following CONSORT 2025.
+:::
+
+See @fig-trial for the participant flow.
+````
+
+This is the same `:::{#fig-id}` syntax Quarto uses for any custom figure
+content, and it produces a numbered figure with a working `@fig-trial`
+reference in both HTML and PDF.
 
 ## Output formats
 
@@ -359,6 +392,14 @@ screening:
   not_retrieved:          number   # optional (sidebar to sought_retrieval)
   assessed:               number   # optional
   excluded_with_reasons:  [string] # optional (sidebar to assessed)
+other_methods:                     # optional parallel right-side column
+  websites:               number   # optional
+  organisations:          number   # optional
+  citation_searching:     number   # optional
+  sought_retrieval:       number   # optional
+  not_retrieved:          number   # optional
+  assessed:               number   # optional
+  excluded_with_reasons:  [string] # optional
 included:
   studies:                number   # optional
   reports:                number   # optional

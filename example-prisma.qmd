@@ -26,9 +26,19 @@ study-flow:
       - "Wrong outcome (n=22)"
       - "Wrong study design (n=18)"
       - "Conference abstract only (n=11)"
+  other_methods:
+    websites: 12
+    organisations: 8
+    citation_searching: 25
+    sought_retrieval: 41
+    not_retrieved: 3
+    assessed: 38
+    excluded_with_reasons:
+      - "Wrong population (n=5)"
+      - "Wrong outcome (n=4)"
   included:
-    studies: 120
-    reports: 134
+    studies: 134
+    reports: 142
 ---
 
 # Systematic review
