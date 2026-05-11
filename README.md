@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Quarto](https://img.shields.io/badge/Quarto-%E2%89%A51.4-37a779.svg)](https://quarto.org)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20125560.svg)](https://doi.org/10.5281/zenodo.20125560)
 
 A Quarto shortcode extension that renders **participant-flow diagrams**
 for five reporting guidelines from structured YAML in your document
